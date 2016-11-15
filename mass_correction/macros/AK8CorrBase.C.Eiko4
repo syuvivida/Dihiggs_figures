@@ -1,0 +1,362 @@
+
+void AK8CorrBase(int wMs,int wM, string st,string st2,string option=""){	
+
+	//1=signal ,0=QCD ,2=data
+	int nameRoot=1;
+	if((st2.find("QCD")!= std::string::npos)||
+	(st2.find("bGen")!= std::string::npos)||
+	(st2.find("bEnriched")!= std::string::npos))nameRoot=0;
+	if(st2.find("data")!= std::string::npos)nameRoot=2;
+	
+	bool fixGen=true;
+	//	if(st2.find("B1000")!= std::string::npos)fixGen=1;
+	cout<<"nameRoot = "<<nameRoot<<endl;
+	
+	//option-----------------------------------------------------------
+	
+	int JESOption=0;
+	if(option.find("JESUp")!= std::string::npos)JESOption=1;
+	if(option.find("JESDown")!= std::string::npos)JESOption=2;
+	cout<<"JESOption = "<<JESOption<<endl;
+	
+	
+	TFile *f;
+	TTree *tree;
+	int nPass[20]={0};
+	int total=0;
+
+	TH1D* thpid = new TH1D("thpid","abs(PID)",6000,0.5,6000.5);
+	TH1D* thdRbn = new TH1D("thdRbn","#DeltaR (b-hadron,#nu)",200,0,5);
+	TH1D* thdRjn = new TH1D("thdRjn","#DeltaR (AK8 jet,#nu)",200,0,5);
+	TH1D* thdRjb = new TH1D("thdRjn","#DeltaR (AK8 jet,b-hadron)",200,0,5);
+	TH1D* thzbB = new TH1D("thzbB","z=p_{T}(B)/p_{T}(b)",200,0,5);
+	TH1D* th1;
+	th1=new TH1D("mass","mass",150,0,150);
+	
+	TH1D* th3;
+	th3=new TH1D("mass","mass",1500,200,3200);
+	
+	double ptBins[14]={200,300,400,500,600,700,800,900,1000,1250,1500,1750,2000,2500};
+	
+	TH1D* th2[6][14];
+	
+	for(int i=0;i<14;i++){
+		th2[0][i]=(TH1D*)th1->Clone(Form("genBarelMass%.0f",ptBins[i]));
+		th2[1][i]=(TH1D*)th1->Clone(Form("genEndcapMass%.0f",ptBins[i]));
+		th2[2][i]=(TH1D*)th1->Clone(Form("recoBarelMass%.0f",ptBins[i]));
+		th2[3][i]=(TH1D*)th1->Clone(Form("recoEndcapMass%.0f",ptBins[i]));
+		th2[4][i]=(TH1D*)th3->Clone(Form("ptBarel%.0f",ptBins[i]));
+		th2[5][i]=(TH1D*)th3->Clone(Form("ptEndcap%.0f",ptBins[i]));
+	}
+
+	for(int i=0;i<14;i++){
+		th2[0][i]->Sumw2();
+		th2[1][i]->Sumw2();
+		th2[2][i]->Sumw2();
+		th2[3][i]->Sumw2();
+		th2[4][i]->Sumw2();
+		th2[5][i]->Sumw2();
+	}
+	
+	//---------------------------------
+	
+	for (int w=wMs;w<wM;w++){
+		if(w%20==0)cout<<w<<endl;
+		
+		if (nameRoot!=1)f = TFile::Open(Form("%s%d.root",st.data(),w));
+		else f = TFile::Open(st.data());
+		if (!f || !f->IsOpen())continue;
+		
+		TDirectory * dir;
+		if (nameRoot!=1)dir = (TDirectory*)f->Get(Form("%s%d.root:/tree",st.data(),w));
+		else dir = (TDirectory*)f->Get(Form("%s:/tree",st.data()));
+		
+		dir->GetObject("treeMaker",tree);
+		TreeReader data(tree);
+		total+=data.GetEntriesFast();
+		for(Long64_t jEntry=0; jEntry<data.GetEntriesFast() ;jEntry++){
+		  //		  if(jEntry>50)break;
+		        if(jEntry%2)continue;
+			data.GetEntry(jEntry);
+			//			cout << "event = " << jEntry << endl;
+			
+			
+			Int_t nGenPar        = data.GetInt("nGenPar");
+			Int_t* genParId      = data.GetPtrInt("genParId");
+			Int_t* genParSt      = data.GetPtrInt("genParSt");
+			Int_t* genMomParId   = data.GetPtrInt("genMomParId");
+			Int_t* genDa1      = data.GetPtrInt("genDa1");
+			Int_t* genDa2      = data.GetPtrInt("genDa2");
+			Int_t* genMo1      = data.GetPtrInt("genMo1");
+			TClonesArray* genParP4 = (TClonesArray*) data.GetPtrTObject("genParP4");
+
+			int genHIndex[2]={-1,-1};
+			int genbIndex[2][2]={{-1,-1},
+						{-1,-1}};		       
+			std::vector<int> neutrinos;
+			neutrinos.clear();
+			std::vector<int> Higgses;
+			Higgses.clear();
+			std::vector<int> bhadrons;
+			bhadrons.clear();
+			for(int ig=0; ig < nGenPar; ig++){
+
+			  int pid   = abs(genParId[ig]);
+			  int mpid  = abs(genMomParId[ig]);
+
+			  if( (pid==12 || pid==14 || pid==16) && genParSt[ig]==1
+			      )
+			    {
+			      
+			      // Now start checking the mother all the way and make sure we only 
+			      // consider neutrinos from Higgs
+			      bool hasHMother=false;
+			      int mpid=-9999;
+			      int dindex=ig;
+			      int dpid=-9999;
+			      int mindex=-1;
+			      int bquarkIndex=-1;
+			      int bhadronIndex=-1;
+			      while(!hasHMother && dindex>=0 && abs(mpid)!=2212){
+			      
+				mpid = genMomParId[dindex];
+				mindex= genMo1[dindex];
+				dpid = genParId[dindex];
+				//				cout << ig << "\t" << dindex << "\t" << mindex << "\t" << mpid << "\t" << dpid << endl;
+				if( mpid==25)
+				  {
+				    hasHMother=true;
+				    bquarkIndex=dindex;
+				  }
+				else
+				  {
+				    dindex=mindex;
+				    hasHMother=false;
+				    if((abs(mpid)>=500 && abs(mpid)<600) ||
+				       (abs(mpid)>=5000 && abs(mpid)<6000))
+				      {
+					bhadronIndex=mindex;
+				      }
+				  }
+			      }
+			    
+			      
+			      if(!hasHMother)continue;
+			      if(bhadronIndex<0)continue;
+			      if(bquarkIndex<0)continue;
+
+			      TLorentzVector* nu_l4 = (TLorentzVector*)genParP4->At(ig);
+			      TLorentzVector* b_l4  = (TLorentzVector*)genParP4->At(bquarkIndex);
+			      TLorentzVector* B_l4  = (TLorentzVector*)genParP4->At(bhadronIndex);
+
+			      float dR = nu_l4->DeltaR(*B_l4);
+			      thdRbn->Fill(dR);
+			      float z = B_l4->Pt()/b_l4->Pt();
+			      // if(z>1.5)
+			      //			      cout << jEntry << "\t" << mindex << "\t" << bquarkIndex << "\t" << bhadronIndex << "\t" << ig << endl;
+			      thzbB->Fill(z);
+			      neutrinos.push_back(ig);
+			      Higgses.push_back(mindex);
+			      bhadrons.push_back(bhadronIndex);
+			    }
+
+			  if(genParId[ig]!=25)continue;
+
+				if(genHIndex[0]<0)
+				{
+				genHIndex[0]=ig;
+				genbIndex[0][0]=genDa1[ig];
+				genbIndex[0][1]=genDa2[ig];
+				}
+
+				else if(genHIndex[1]<0)
+				{
+				genHIndex[1]=ig;
+				genbIndex[1][0]=genDa1[ig];
+				genbIndex[1][1]=genDa2[ig];
+				}
+
+			}    
+
+			if(genHIndex[0]<0 || genHIndex[1]<0)continue;
+			if(genbIndex[0][0]<0 || genbIndex[0][1]<0)continue;
+			if(genbIndex[1][0]<0 || genbIndex[1][1]<0)continue;
+
+			nPass[0]++;
+
+			if(genHIndex[0]==genHIndex[1])continue;
+			nPass[1]++;
+
+
+			TLorentzVector genH_l4[2];
+			TLorentzVector genb_l4[2][2];
+			
+			
+
+			for(int ih=0; ih<2; ih++)
+			{
+				genH_l4[ih] = *((TLorentzVector*)genParP4->At(genHIndex[ih]));
+				for(int ib=0; ib<2; ib++)
+				{
+				genb_l4[ih][ib] = *((TLorentzVector*)genParP4->At(genbIndex[ih][ib]));
+				}
+			}
+
+
+			  
+			TClonesArray* AK8PuppijetP4 = (TClonesArray*) data.GetPtrTObject("AK8PuppijetP4");
+
+			// check matching first    
+			bool findAK8Match=false;
+			const float dRMax=0.4;
+			const float dRbMax=0.8;
+			int matchedHAK8JetIndex[2]={-1,-1};
+			int matchedHiggsIndex[2]={-1,-1};
+			int AK8nJet=data.GetInt("AK8PuppinJet");
+			if(AK8nJet<2)continue;
+			bool matchb=1;
+			for(int ij=0; ij<AK8nJet; ij++)
+			{
+				TLorentzVector* thisJet = (TLorentzVector*)AK8PuppijetP4->At(ij);
+
+				for(int jj=0; jj<AK8nJet; jj++)
+				{
+
+				if(ij==jj)continue;
+				TLorentzVector* thatJet = (TLorentzVector*)AK8PuppijetP4->At(jj);
+	    
+				if(thisJet->DeltaR(genH_l4[0])<dRMax && 
+					(!matchb || (matchb && 
+						thisJet->DeltaR(genb_l4[0][0])<dRbMax && 
+						thisJet->DeltaR(genb_l4[0][1])<dRbMax)) &&
+					thatJet->DeltaR(genH_l4[1])<dRMax &&
+					(!matchb || (matchb &&
+						thatJet->DeltaR(genb_l4[1][0])<dRbMax &&
+						thatJet->DeltaR(genb_l4[1][1])<dRbMax)))
+					{
+					
+					if(ij<jj){
+					matchedHAK8JetIndex[0]=ij;
+					matchedHAK8JetIndex[1]=jj;
+					matchedHiggsIndex[0]=genHIndex[0];
+					matchedHiggsIndex[1]=genHIndex[1];
+					}
+					else
+					{
+					matchedHAK8JetIndex[0]=jj;
+					matchedHAK8JetIndex[1]=ij;
+					matchedHiggsIndex[0]=genHIndex[1];
+					matchedHiggsIndex[1]=genHIndex[0];
+					}
+					findAK8Match=true;
+					break;
+					}
+
+				if(findAK8Match)break;
+	
+				}	
+
+				if(findAK8Match)break;
+
+				}
+	
+			if(!findAK8Match)continue;
+			
+			
+			
+			
+			Float_t*  AK8PuppijetGenSDmass;
+			if(fixGen)AK8PuppijetGenSDmass= data.GetPtrFloat("AK8PuppijetSDmass");
+			else 	AK8PuppijetGenSDmass= data.GetPtrFloat("AK8PuppijetGenSDmass");
+			Float_t*  AK8PuppijetSDmass = data.GetPtrFloat("AK8PuppijetSDmass");
+			int* AK8PuppinSubSDJet=data.GetPtrInt("AK8PuppinSubSDJet");
+			
+		
+			for(int i=0; i<2;i++){
+		
+				
+				int AK8jet=matchedHAK8JetIndex[i];
+				
+				TLorentzVector* thisAK8Jet = (TLorentzVector*)AK8PuppijetP4->At(AK8jet);
+				if(thisAK8Jet->Pt()<200)continue;
+				if(fabs(thisAK8Jet->Eta())>2.4)continue;
+				if(AK8PuppinSubSDJet[AK8jet]!=2)continue;
+
+				// check if there are any neutrinos matched to this Higgs jet
+				bool hasNeutrinos=false;
+				for(unsigned int ip=0; ip<neutrinos.size();ip++)
+				  {
+				    TLorentzVector* thisNeutrino= (TLorentzVector*)genParP4->At(neutrinos[ip]);
+				    TLorentzVector* thisbHadron = (TLorentzVector*)genParP4->At(bhadrons[ip]);
+				    if(Higgses[ip]!=matchedHiggsIndex[i])continue;
+				    thdRjn->Fill(thisNeutrino->DeltaR(*thisAK8Jet));
+				    thdRjb->Fill(thisbHadron->DeltaR(*thisAK8Jet));
+					// cout << "Higgses[ip] = " << Higgses[ip]  << "\t" << matchedHiggsIndex[i] << "\t" << neutrinos[ip] << "\t" 
+					//      << bhadrons[ip] << endl;
+				    if(thisbHadron->DeltaR(*thisAK8Jet)<dRbMax)
+				      {
+					//					cout << jEntry << "\t AK8jet = " << AK8jet << "\t Higgses[ip] = " << Higgses[ip]  << "\t" << matchedHiggsIndex[i] << "\t" << neutrinos[ip] << "\t" << bhadrons[ip] << endl;
+					hasNeutrinos=true;
+					//					break;
+				      }
+				  }
+				     
+				if(hasNeutrinos)continue;
+			
+				th1->Fill(AK8PuppijetGenSDmass[AK8jet]);
+				
+				for(int j=0;j<13;j++){
+					if(thisAK8Jet->Pt()>ptBins[j] && thisAK8Jet->Pt()<ptBins[j+1]){
+						
+						if(fabs(thisAK8Jet->Eta())<1.3){
+							th2[0][j]->Fill(AK8PuppijetGenSDmass[AK8jet]);
+							th2[2][j]->Fill(AK8PuppijetSDmass[AK8jet]);
+							th2[4][j]->Fill(thisAK8Jet->Pt());
+						}
+						else{
+							th2[1][j]->Fill(AK8PuppijetGenSDmass[AK8jet]);
+							th2[3][j]->Fill(AK8PuppijetSDmass[AK8jet]);
+							th2[5][j]->Fill(thisAK8Jet->Pt());
+						}
+							
+					}
+				}
+				
+				if(thisAK8Jet->Pt()>ptBins[13]){
+					if(fabs(thisAK8Jet->Eta())<1.3){
+							th2[0][13]->Fill(AK8PuppijetGenSDmass[AK8jet]);
+							th2[2][13]->Fill(AK8PuppijetSDmass[AK8jet]);
+							th2[4][13]->Fill(thisAK8Jet->Pt());
+						}
+						else{
+							th2[1][13]->Fill(AK8PuppijetGenSDmass[AK8jet]);
+							th2[3][13]->Fill(AK8PuppijetSDmass[AK8jet]);
+							th2[5][13]->Fill(thisAK8Jet->Pt());
+						}
+				}
+				
+			}
+			
+		}
+	}	
+	cout<<"entries="<<total<<endl;	
+	
+	
+	TFile* outFile ;
+	outFile= new TFile(Form("corr2/%s.root",st2.data()),"recreate");
+        thpid->Write();
+	thdRbn->Write();
+	thdRjn->Write();
+	thdRjb->Write();
+	thzbB->Write();
+	th1->Write();
+	for(int i=0;i<14;i++){
+		th2[0][i]->Write();
+		th2[1][i]->Write();
+		th2[2][i]->Write();
+		th2[3][i]->Write();
+		th2[4][i]->Write();
+		th2[5][i]->Write();
+	}
+	outFile->Close();
+}

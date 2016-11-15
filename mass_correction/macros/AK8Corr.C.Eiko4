@@ -1,0 +1,63 @@
+//Histogram 
+#include <TH1.h>
+//#include <TH1F.h>
+#include <TH1D.h>
+#include <TH2D.h>
+//#include <TGraph.h>
+//#include <TGraphErrors.h>
+
+//vector ,string ,stream
+#include <vector>
+#include <string>
+#include <iostream>
+//#include <fstream>
+//#include <sstream>
+
+//root feature
+//#include <TLegend.h>
+//#include <TRandom.h>
+#include <TLorentzVector.h>
+#include <TROOT.h>
+#include <TFile.h>
+//#include <TCanvas.h>
+#include "TSystem.h"
+//#include "TStyle.h"
+#include <TClonesArray.h>
+
+//math 
+#include <cmath>
+//#include <algorithm>
+
+//other including
+//#include "setNCUStyle.C"
+#include "untuplizer.h"
+//#include "jetEnergyScale.h"
+
+//#include "standalone_LumiReWeighting.cc"
+//#include "standalone_LumiReWeighting.h"
+
+//#include "CondFormats/BTauObjects/interface/BTagCalibration.h"
+//#include "CondFormats/BTauObjects/interface/BTagCalibrationReader.h"
+#include "AK8CorrBase.C"
+
+using namespace std;
+
+void AK8Corr(){
+
+	string st1[8]={
+	  "/data7/syu/special_study/80X_miniAOD/80X_neutrino/BulkGravTohhTohbbhbb/B400.root",
+	  "/data7/syu/special_study/80X_miniAOD/80X_neutrino/BulkGravTohhTohbbhbb/B500.root",
+	  "/data7/syu/special_study/80X_miniAOD/80X_neutrino/BulkGravTohhTohbbhbb/B800.root",
+	  "/data7/syu/special_study/80X_miniAOD/80X_neutrino/BulkGravTohhTohbbhbb/B1000.root",
+	  "/data7/syu/special_study/80X_miniAOD/80X_neutrino/BulkGravTohhTohbbhbb/B1400.root",
+	  "/data7/syu/special_study/80X_miniAOD/80X_neutrino/BulkGravTohhTohbbhbb/B2000.root",
+	  "/data7/syu/special_study/80X_miniAOD/80X_neutrino/BulkGravTohhTohbbhbb/B3000.root",
+	  "/data7/syu/special_study/80X_miniAOD/80X_neutrino/BulkGravTohhTohbbhbb/B4500.root"
+	};
+	string fileName[8]={
+	  "B400","B500","B800","B1000","B1400","B2000","B3000","B4500"
+	};
+	gSystem->Exec("rm -rf corr2");
+	gSystem->mkdir("corr2");
+	for(int i=0;i<8;i++)AK8CorrBase(1,2,st1[i],fileName[i]);
+}
