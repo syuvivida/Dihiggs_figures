@@ -28,7 +28,7 @@ void AK8CorrBase(int wMs,int wM, string st,string st2,string option=""){
 	TH1D* thpid = new TH1D("thpid","abs(PID)",6000,0.5,6000.5);
 	TH1D* thdRbn = new TH1D("thdRbn","#DeltaR (b-hadron,#nu)",200,0,5);
 	TH1D* thdRjn = new TH1D("thdRjn","#DeltaR (AK8 jet,#nu)",200,0,5);
-	TH1D* thdRjb = new TH1D("thdRjn","#DeltaR (AK8 jet,b-hadron)",200,0,5);
+	TH1D* thdRjb = new TH1D("thdRjb","#DeltaR (AK8 jet,b-hadron)",200,0,5);
 	TH1D* thzbB = new TH1D("thzbB","z=p_{T}(B)/p_{T}(b)",200,0,5);
 	TH1D* th1;
 	th1=new TH1D("mass","mass",150,0,150);
